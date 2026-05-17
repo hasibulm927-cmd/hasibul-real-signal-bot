@@ -3,7 +3,7 @@ from flask_cors import CORS
 import requests
 import random
 import pytz
-
+from datetime import datetime
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
@@ -67,7 +67,19 @@ def get_real_price(symbol):
 # =========================
 # SESSION DETECTION
 # =========================
+def market_open():
 
+    now = datetime.utcnow()
+
+    weekday = now.weekday()
+
+    # Saturday = 5
+    # Sunday = 6
+
+    if weekday == 5 or weekday == 6:
+        return False
+
+    return True
 def get_session(hour):
 
     if 5 <= hour < 12:
