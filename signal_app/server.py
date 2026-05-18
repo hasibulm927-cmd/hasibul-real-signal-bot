@@ -1,29 +1,15 @@
 from flask import Flask, jsonify, render_template_string
 from flask_cors import CORS
-import requests
 import random
 import pytz
-from datetime import datetime
 from datetime import datetime, timedelta
+import yfinance as yf
+import pandas_ta as ta
 
 app = Flask(__name__)
 CORS(app)
 
-# =========================
-# API KEY
-# =========================
-
-API_KEY = "2ce4b507c77c48599f27e63ccb7b7de4"
-
-# =========================
-# TIMEZONE
-# =========================
-
 india = pytz.timezone("Asia/Kolkata")
-
-# =========================
-# FOREX PAIRS
-# =========================
 
 pairs = [
     "EURUSD",
@@ -35,51 +21,170 @@ pairs = [
     "GBPJPY"
 ]
 
-# =========================
-# CANDLE PATTERNS
-# =========================
+def get_market_data(symbol):
 
-patterns = [
-    "ENGULFING",
-    "PIN BAR",
-    "HAMMER",
-    "SHOOTING STAR",
-    "DOJI"
-]
+    pair_map = {
+        "EURUSD": "EURUSD=X",
+        "GBPUSD": "GBPUSD=X",
+        "USDJPY": "USDJPY=X",
+        "AUDUSD": "AUDUSD=X",
+        "USDCAD": "USDCAD=X",
+        "EURJPY": "EURJPY=X",
+        "GBPJPY": "GBPJPY=X"
+    }
 
-# =========================
-# REAL MARKET PRICE
-# =========================
+    yf_symbol = pair_map.get(symbol)
 
-def get_real_price(symbol):
+    try:
 
-    url = f"https://api.twelvedata.com/price?symbol={symbol}&apikey={API_KEY}"
+        df = yf.download(
+            tickers=yf_symbol,
+            period="5d",
+            interval="5m",
+            auto_adjust=True,
+            threads=False,
+            progress=False
+        )
 
-    response = requests.get(url)
+        if df.empty:
+            return {
+                "price": 0,
+                "rsi": 50,
+                "ema": "UPTREND",
+                "macd": "BUY",
+                "pattern": "NONE"
+            }
 
-    data = response.json()
+        df.dropna(inplace=True)
 
-    if "price" in data:
-        return float(data["price"])
+        close_series = df["Close"]
 
-    return 0
+        if hasattr(close_series, "iloc") and len(close_series.shape) > 1:
+            close_series = close_series.iloc[:, 0]
 
-# =========================
-# SESSION DETECTION
-# =========================
-def market_open():
+        df["RSI"] = ta.rsi(close_series, length=14)
+        df["EMA20"] = ta.ema(close_series, length=20)
 
-    now = datetime.utcnow()
+        macd = ta.macd(close_series)
 
-    weekday = now.weekday()
+        if macd is not None:
+            df["MACD"] = macd.iloc[:, 0]
+            df["MACD_SIGNAL"] = macd.iloc[:, 1]
+        else:
+            df["MACD"] = 0
+            df["MACD_SIGNAL"] = 0
 
-    # Saturday = 5
-    # Sunday = 6
+        df.dropna(inplace=True)
 
-    if weekday == 5 or weekday == 6:
-        return False
+        if len(df) < 2:
+            return {
+                "price": 0,
+                "rsi": 50,
+                "ema": "UPTREND",
+                "macd": "BUY",
+                "pattern": "NONE"
+            }
 
-    return True
+        latest = df.iloc[-1]
+        prev = df.iloc[-2]
+
+        close_price = latest["Close"]
+
+        if hasattr(close_price, "iloc"):
+            close_price = close_price.iloc[0]
+
+        price = round(float(close_price), 5)
+
+        rsi_value = latest["RSI"]
+
+        if hasattr(rsi_value, "iloc"):
+            rsi_value = rsi_value.iloc[0]
+
+        rsi = round(float(rsi_value), 2)
+
+        ema20 = latest["EMA20"]
+
+        if hasattr(ema20, "iloc"):
+            ema20 = ema20.iloc[0]
+
+        if price > float(ema20):
+            ema_trend = "UPTREND"
+        else:
+            ema_trend = "DOWNTREND"
+
+        macd_value = latest["MACD"]
+        macd_signal_value = latest["MACD_SIGNAL"]
+
+        if hasattr(macd_value, "iloc"):
+            macd_value = macd_value.iloc[0]
+
+        if hasattr(macd_signal_value, "iloc"):
+            macd_signal_value = macd_signal_value.iloc[0]
+
+        if float(macd_value) > float(macd_signal_value):
+            macd_signal = "BUY"
+        else:
+            macd_signal = "SELL"
+
+        pattern = "NONE"
+
+        try:
+
+            prev_open = float(prev["Open"])
+            prev_close = float(prev["Close"])
+            latest_open = float(latest["Open"])
+            latest_close = float(latest["Close"])
+            latest_high = float(latest["High"])
+            latest_low = float(latest["Low"])
+
+            if (
+                prev_close < prev_open
+                and latest_close > latest_open
+                and latest_close > prev_open
+                and latest_open < prev_close
+            ):
+                pattern = "BULLISH ENGULFING"
+
+            elif (
+                prev_close > prev_open
+                and latest_close < latest_open
+                and latest_open > prev_close
+                and latest_close < prev_open
+            ):
+                pattern = "BEARISH ENGULFING"
+
+            elif abs(latest_close - latest_open) < 0.0001:
+                pattern = "DOJI"
+
+            elif (
+                (latest_high - latest_low)
+                > 3 * abs(latest_open - latest_close)
+            ):
+                pattern = "HAMMER"
+
+        except:
+            pattern = "NONE"
+
+        return {
+            "price": price,
+            "rsi": rsi,
+            "ema": ema_trend,
+            "macd": macd_signal,
+            "pattern": pattern
+        }
+
+    except Exception as e:
+
+        print("ERROR:", e)
+
+        return {
+            "price": 0,
+            "rsi": 50,
+            "ema": "UPTREND",
+            "macd": "BUY",
+            "pattern": "NONE"
+        }
+
 def get_session(hour):
 
     if 5 <= hour < 12:
@@ -91,17 +196,12 @@ def get_session(hour):
     else:
         return "NEW YORK SESSION"
 
-# =========================
-# HOME PAGE
-# =========================
-
 @app.route("/")
 def home():
 
     return render_template_string("""
 
 <!DOCTYPE html>
-
 <html>
 
 <head>
@@ -241,8 +341,6 @@ ${item.signal}
 
 <div class="info">🕯 Pattern: ${item.pattern}</div>
 
-<div class="info">🌊 Volatility: ${item.volatility}</div>
-
 <div class="info">🌍 Session: ${item.session}</div>
 
 </div>
@@ -267,62 +365,23 @@ setInterval(loadSignals,15000);
 
 """)
 
-# =========================
-# SIGNAL API
-# =========================
-
 @app.route("/signal")
 def signal():
-now = datetime.now(india)
 
-    # Saturday = 5
-    # Sunday = 6
-
-    if now.weekday() in [5, 6]:
-
-        return jsonify([
-            {
-                "pair": "FOREX MARKET",
-                "signal": "MARKET CLOSED",
-                "confidence": 0,
-                "rsi": "-",
-                "macd": "-",
-                "ema_trend": "-",
-                "pattern": "-",
-                "volatility": "-",
-                "session": "WEEKEND",
-                "trade_duration": "-",
-                "trade_time": "-",
-                "entry_time": "-",
-                "expiry": "-",
-                "expiry_time": "-",
-                "price": "-",
-                "refresh": "MARKET CLOSED"
-            }
-        ])
-    
+    now = datetime.now(india)
 
     data = []
 
     for pair in pairs:
 
-        # REAL PRICE
-        price = get_real_price(pair)
+        market = get_market_data(pair)
 
-        # RANDOM ANALYSIS
-        rsi = random.randint(35, 80)
+        price = market["price"]
+        rsi = market["rsi"]
+        ema = market["ema"]
+        macd = market["macd"]
+        pattern = market["pattern"]
 
-        macd = random.choice([
-            "BUY",
-            "SELL"
-        ])
-
-        ema = random.choice([
-            "UPTREND",
-            "DOWNTREND"
-        ])
-
-        # CONFIDENCE
         if macd == "BUY" and ema == "UPTREND":
             confidence = random.randint(88, 99)
 
@@ -332,15 +391,6 @@ now = datetime.now(india)
         else:
             confidence = random.randint(70, 84)
 
-        volatility = random.choice([
-            "LOW",
-            "MEDIUM",
-            "HIGH"
-        ])
-
-        pattern = random.choice(patterns)
-
-        # SIGNAL
         signal = "WAIT SIGNAL"
 
         if (
@@ -360,46 +410,32 @@ now = datetime.now(india)
         if pattern == "DOJI":
             signal = "WAIT SIGNAL"
 
-        # EXPIRY
-        if confidence >= 95 and volatility == "LOW":
-
+        if confidence >= 95:
             expiry = "5 MIN"
-            trade_duration = "5 MIN"
 
         elif confidence >= 90:
-
             expiry = "3 MIN"
-            trade_duration = "3 MIN"
 
         else:
-
             expiry = "1 MIN"
-            trade_duration = "1 MIN"
-
-        # TIMES
-        trade_time = now.strftime("%I:%M:%S %p")
 
         entry_time = now.strftime("%I:%M:%S %p")
 
         if expiry == "1 MIN":
-
             expiry_time = (
                 now + timedelta(minutes=1)
             ).strftime("%I:%M:%S %p")
 
         elif expiry == "3 MIN":
-
             expiry_time = (
                 now + timedelta(minutes=3)
             ).strftime("%I:%M:%S %p")
 
         else:
-
             expiry_time = (
                 now + timedelta(minutes=5)
             ).strftime("%I:%M:%S %p")
 
-        # FINAL JSON
         signal_data = {
 
             "pair": pair,
@@ -409,26 +445,21 @@ now = datetime.now(india)
             "rsi": rsi,
             "ema_trend": ema,
             "macd": macd,
+
             "signal": signal,
-            "trade_duration": trade_duration,
+
             "confidence": confidence,
-            "volatility": volatility,
             "pattern": pattern,
+
             "entry_time": entry_time,
-            "trade_time": trade_time,
             "expiry": expiry,
-            "expiry_time": expiry_time,
-            "refresh": "15 SEC"
+            "expiry_time": expiry_time
 
         }
 
         data.append(signal_data)
 
     return jsonify(data)
-
-# =========================
-# RUN SERVER
-# =========================
 
 if __name__ == "__main__":
 
