@@ -7,11 +7,11 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-pairs = [
-    "EURUSD=X",
-    "GBPUSD=X",
-    "USDJPY=X"
-]
+pairs = {
+    "EURUSD": "EURUSD=X",
+    "GBPUSD": "GBPUSD=X",
+    "USDJPY": "USDJPY=X"
+}
 
 @app.route("/")
 def home():
@@ -22,37 +22,56 @@ def signal():
 
     data = []
 
-    for pair in pairs:
+    for pair_name, pair_symbol in pairs.items():
 
         try:
 
             df = yf.download(
-                pair,
+                pair_symbol,
                 period="1d",
                 interval="5m",
                 progress=False
             )
 
-            price = round(float(df["Close"].iloc[-1]), 5)
+            close_price = round(
+                float(df["Close"].iloc[-1]),
+                5
+            )
 
-        except:
+            previous_price = round(
+                float(df["Close"].iloc[-2]),
+                5
+            )
 
-            price = 0
+            if close_price > previous_price:
+                signal = "BUY SIGNAL"
 
-        signal = random.choice([
-            "BUY SIGNAL",
-            "SELL SIGNAL",
-            "WAIT SIGNAL"
-        ])
+            elif close_price < previous_price:
+                signal = "SELL SIGNAL"
+
+            else:
+                signal = "WAIT SIGNAL"
+
+        except Exception as e:
+
+            close_price = 0
+            signal = "WAIT SIGNAL"
 
         data.append({
-            "pair": pair,
-            "price": price,
+
+            "pair": pair_name,
+            "price": close_price,
             "signal": signal
+
         })
 
     return jsonify(data)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+
+    port = int(os.environ.get("PORT", 10000))
+
+    app.run(
+        host="0.0.0.0",
+        port=port
+    )
