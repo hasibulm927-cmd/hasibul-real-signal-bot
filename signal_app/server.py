@@ -4,7 +4,8 @@ import random
 import pytz
 from datetime import datetime, timedelta
 import yfinance as yf
-import pandas_ta as ta
+import pandas as pd
+import os
 
 app = Flask(__name__)
 CORS(app)
@@ -62,17 +63,28 @@ def get_market_data(symbol):
         if hasattr(close_series, "iloc") and len(close_series.shape) > 1:
             close_series = close_series.iloc[:, 0]
 
-        df["RSI"] = ta.rsi(close_series, length=14)
-        df["EMA20"] = ta.ema(close_series, length=20)
+        # EMA
+        df["EMA20"] = close_series.ewm(span=20).mean()
 
-        macd = ta.macd(close_series)
+        # RSI
+        delta = close_series.diff()
 
-        if macd is not None:
-            df["MACD"] = macd.iloc[:, 0]
-            df["MACD_SIGNAL"] = macd.iloc[:, 1]
-        else:
-            df["MACD"] = 0
-            df["MACD_SIGNAL"] = 0
+        gain = delta.clip(lower=0)
+        loss = -delta.clip(upper=0)
+
+        avg_gain = gain.rolling(14).mean()
+        avg_loss = loss.rolling(14).mean()
+
+        rs = avg_gain / avg_loss
+
+        df["RSI"] = 100 - (100 / (1 + rs))
+
+        # MACD
+        exp1 = close_series.ewm(span=12, adjust=False).mean()
+        exp2 = close_series.ewm(span=26, adjust=False).mean()
+
+        df["MACD"] = exp1 - exp2
+        df["MACD_SIGNAL"] = df["MACD"].ewm(span=9, adjust=False).mean()
 
         df.dropna(inplace=True)
 
@@ -88,40 +100,15 @@ def get_market_data(symbol):
         latest = df.iloc[-1]
         prev = df.iloc[-2]
 
-        close_price = latest["Close"]
+        price = round(float(latest["Close"]), 5)
+        rsi = round(float(latest["RSI"]), 2)
 
-        if hasattr(close_price, "iloc"):
-            close_price = close_price.iloc[0]
-
-        price = round(float(close_price), 5)
-
-        rsi_value = latest["RSI"]
-
-        if hasattr(rsi_value, "iloc"):
-            rsi_value = rsi_value.iloc[0]
-
-        rsi = round(float(rsi_value), 2)
-
-        ema20 = latest["EMA20"]
-
-        if hasattr(ema20, "iloc"):
-            ema20 = ema20.iloc[0]
-
-        if price > float(ema20):
+        if price > float(latest["EMA20"]):
             ema_trend = "UPTREND"
         else:
             ema_trend = "DOWNTREND"
 
-        macd_value = latest["MACD"]
-        macd_signal_value = latest["MACD_SIGNAL"]
-
-        if hasattr(macd_value, "iloc"):
-            macd_value = macd_value.iloc[0]
-
-        if hasattr(macd_signal_value, "iloc"):
-            macd_signal_value = macd_signal_value.iloc[0]
-
-        if float(macd_value) > float(macd_signal_value):
+        if float(latest["MACD"]) > float(latest["MACD_SIGNAL"]):
             macd_signal = "BUY"
         else:
             macd_signal = "SELL"
@@ -199,171 +186,7 @@ def get_session(hour):
 @app.route("/")
 def home():
 
-    return render_template_string("""
-
-<!DOCTYPE html>
-<html>
-
-<head>
-
-<title>HASIBUL SIGNAL BOT</title>
-
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<style>
-
-body{
-background:#0f172a;
-color:white;
-font-family:Arial;
-padding:15px;
-}
-
-.card{
-background:#1e293b;
-padding:15px;
-border-radius:15px;
-margin-bottom:15px;
-box-shadow:0 0 10px rgba(0,0,0,0.5);
-}
-
-.buy{
-color:#00ff95;
-font-size:24px;
-font-weight:bold;
-}
-
-.sell{
-color:#ff4d6d;
-font-size:24px;
-font-weight:bold;
-}
-
-.wait{
-color:yellow;
-font-size:24px;
-font-weight:bold;
-}
-
-.title{
-font-size:28px;
-font-weight:bold;
-margin-bottom:20px;
-text-align:center;
-}
-
-.info{
-margin-top:8px;
-font-size:18px;
-}
-
-.clock{
-text-align:center;
-font-size:20px;
-margin-bottom:20px;
-color:#38bdf8;
-}
-
-</style>
-
-</head>
-
-<body>
-
-<div class="title">
-🚀 HASIBUL SIGNAL BOT
-</div>
-
-<div class="clock" id="clock"></div>
-
-<div id="signals"></div>
-
-<script>
-
-function updateClock(){
-
-const now = new Date();
-
-document.getElementById("clock").innerHTML =
-"🕒 " + now.toLocaleTimeString();
-
-}
-
-setInterval(updateClock,1000);
-
-updateClock();
-
-async function loadSignals(){
-
-let response = await fetch('/signal');
-
-let data = await response.json();
-
-let html = '';
-
-data.forEach(item => {
-
-let signalClass = "wait";
-
-if(item.signal.includes("BUY")){
-signalClass = "buy";
-}
-
-else if(item.signal.includes("SELL")){
-signalClass = "sell";
-}
-
-html += `
-
-<div class="card">
-
-<div class="${signalClass}">
-${item.signal}
-</div>
-
-<div class="info">📊 Pair: ${item.pair}</div>
-
-<div class="info">💰 Price: ${item.price}</div>
-
-<div class="info">⏰ Entry: ${item.entry_time}</div>
-
-<div class="info">⌛ Expiry: ${item.expiry}</div>
-
-<div class="info">⏳ Ends: ${item.expiry_time}</div>
-
-<div class="info">🎯 Confidence: ${item.confidence}%</div>
-
-<div class="info">📈 RSI: ${item.rsi}</div>
-
-<div class="info">📉 MACD: ${item.macd}</div>
-
-<div class="info">📊 EMA: ${item.ema_trend}</div>
-
-<div class="info">🕯 Pattern: ${item.pattern}</div>
-
-<div class="info">🌍 Session: ${item.session}</div>
-
-</div>
-
-`;
-
-});
-
-document.getElementById('signals').innerHTML = html;
-
-}
-
-loadSignals();
-
-setInterval(loadSignals,15000);
-
-</script>
-
-</body>
-
-</html>
-
-""")
+    return "HASIBUL SIGNAL BOT RUNNING"
 
 @app.route("/signal")
 def signal():
@@ -460,8 +283,6 @@ def signal():
         data.append(signal_data)
 
     return jsonify(data)
-
-import os
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
