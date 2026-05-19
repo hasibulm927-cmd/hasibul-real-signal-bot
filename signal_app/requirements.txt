@@ -1,6 +1,4 @@
 flask
 flask-cors
-pytz
 yfinance
-pandas
 gunicorn
