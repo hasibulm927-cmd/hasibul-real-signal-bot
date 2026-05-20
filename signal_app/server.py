@@ -1,57 +1,67 @@
 from flask import Flask, jsonify
 from flask_cors import CORS
-import yfinance as yf
-import random
+
+from market import get_market_data
+from signals import generate_signal
+
 import os
 
 app = Flask(__name__)
+
 CORS(app)
 
-pairs = {
-    "EURUSD": "EURUSD=X",
-    "GBPUSD": "GBPUSD=X",
-    "USDJPY": "USDJPY=X"
-}
+pairs = [
+
+    "EURUSD",
+    "GBPUSD",
+    "USDJPY",
+    "AUDUSD",
+    "USDCAD",
+    "EURJPY",
+    "GBPJPY",
+    "EURGBP",
+    "NZDUSD",
+    "USDCHF"
+
+]
 
 @app.route("/")
+
 def home():
-    return "HASIBUL SIGNAL BOT RUNNING"
 
-@app.route("/signal")
-def signal():
+    return "HASIBUL REAL SIGNAL BOT RUNNING"
 
-    data = []
+@app.route("/signal/<pair>")
 
-    for pair, symbol in pairs.items():
+def signal(pair):
 
-        try:
-            df = yf.download(
-                symbol,
-                period="1d",
-                interval="1m",
-                progress=False
-            )
+    pair = pair.upper()
 
-            price = round(float(df["Close"].iloc[-1]), 5)
+    if pair not in pairs:
 
-        except:
-            price = 0
+        return jsonify({
 
-        signal_type = random.choice([
-            "BUY SIGNAL",
-            "SELL SIGNAL"
-        ])
+            "error": "INVALID PAIR"
 
-        confidence = random.randint(85, 99)
-
-        data.append({
-            "pair": pair,
-            "price": price,
-            "signal": signal_type,
-            "confidence": confidence
         })
 
-    return jsonify(data)
+    try:
+
+        df = get_market_data(pair)
+
+        result = generate_signal(df)
+
+        result["pair"] = pair
+
+        return jsonify(result)
+
+    except Exception as e:
+
+        return jsonify({
+
+            "error": str(e)
+
+        })
 
 if __name__ == "__main__":
 
