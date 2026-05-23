@@ -5,22 +5,30 @@ from trend_strength import trend_strength
 
 from datetime import datetime, timedelta
 
+import pytz
+
 
 def generate_signal(df):
+
+    # =====================================
+    # INDIAN TIME
+    # =====================================
+
+    india = pytz.timezone("Asia/Kolkata")
+
+    now = datetime.now(india)
+
+    entry_time = now.strftime("%H:%M:%S")
 
     # =====================================
     # CURRENT PRICE
     # =====================================
 
-    current_price = float(df["close"].iloc[-1])
+    current_price = float(
 
-    # =====================================
-    # TIME
-    # =====================================
+        df["close"].iloc[-1]
 
-    now = datetime.now()
-
-    entry_time = now.strftime("%H:%M:%S")
+    )
 
     # =====================================
     # INDICATORS
@@ -116,6 +124,22 @@ def generate_signal(df):
             confidence = 90
 
         # =====================================
+        # ULTRA STRONG BUY
+        # =====================================
+
+        if (
+
+            strength >= 95
+
+            and trend == "STRONG"
+
+            and rsi >= 70
+
+        ):
+
+            confidence = 95
+
+        # =====================================
         # DYNAMIC EXPIRY
         # =====================================
 
@@ -175,6 +199,22 @@ def generate_signal(df):
         ):
 
             confidence = 90
+
+        # =====================================
+        # ULTRA STRONG SELL
+        # =====================================
+
+        if (
+
+            strength >= 95
+
+            and trend == "STRONG"
+
+            and rsi <= 30
+
+        ):
+
+            confidence = 95
 
         # =====================================
         # DYNAMIC EXPIRY
