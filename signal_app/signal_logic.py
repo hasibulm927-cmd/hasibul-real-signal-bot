@@ -8,6 +8,42 @@ from datetime import datetime, timedelta
 import pytz
 
 
+# =====================================
+# WILLIAMS %R
+# =====================================
+
+def williams_r(df, period=14):
+
+    highest_high = df["high"].rolling(period).max()
+
+    lowest_low = df["low"].rolling(period).min()
+
+    wr = (
+
+        (highest_high - df["close"])
+
+        / (highest_high - lowest_low)
+
+    ) * -100
+
+    return float(wr.iloc[-1])
+
+
+# =====================================
+# MOVING AVERAGE
+# =====================================
+
+def moving_average(df, period=50):
+
+    ma = df["close"].rolling(period).mean()
+
+    return float(ma.iloc[-1])
+
+
+# =====================================
+# MAIN SIGNAL FUNCTION
+# =====================================
+
 def generate_signal(df):
 
     # =====================================
@@ -31,6 +67,36 @@ def generate_signal(df):
     )
 
     # =====================================
+    # LIVE COUNTDOWN
+    # =====================================
+
+    seconds_left = 60 - now.second
+
+    countdown = f"00:{seconds_left:02d}"
+
+    # =====================================
+    # ENTRY ZONE
+    # =====================================
+
+    if seconds_left >= 35:
+
+        entry_zone = "SAFE ENTRY"
+
+        zone_color = "GREEN"
+
+    elif seconds_left >= 20:
+
+        entry_zone = "RISKY ENTRY"
+
+        zone_color = "YELLOW"
+
+    else:
+
+        entry_zone = "NO ENTRY"
+
+        zone_color = "RED"
+
+    # =====================================
     # INDICATORS
     # =====================================
 
@@ -41,6 +107,18 @@ def generate_signal(df):
     ema10 = float(indicators["ema10"])
 
     ema20 = float(indicators["ema20"])
+
+    # =====================================
+    # WILLIAMS %R
+    # =====================================
+
+    wr = williams_r(df)
+
+    # =====================================
+    # MOVING AVERAGE
+    # =====================================
+
+    ma50 = moving_average(df)
 
     # =====================================
     # PATTERN
@@ -64,7 +142,11 @@ def generate_signal(df):
     # EMA GAP
     # =====================================
 
-    ema_gap = abs(ema10 - ema20)
+    ema_gap = abs(
+
+        ema10 - ema20
+
+    )
 
     # =====================================
     # DEFAULT VALUES
@@ -74,54 +156,95 @@ def generate_signal(df):
 
     confidence = 50
 
-    expiry = "5 MIN"
+    expiry = "WAIT"
 
-    entry_status = "WAIT NEXT CANDLE"
+    expiry_time = "--"
+
+    entry_status = "WAIT"
 
     # =====================================
-    # STRONG BUY LOGIC
+    # LAST MOMENT ENTRY BLOCK
+    # =====================================
+
+    if seconds_left <= 20:
+
+        return {
+
+            "price": round(current_price, 5),
+
+            "signal": "WAIT",
+
+            "confidence": 50,
+
+            "entry_status": "WAIT NEXT CANDLE",
+
+            "entry_time": entry_time,
+
+            "expiry": "WAIT",
+
+            "expiry_time": "--",
+
+            "countdown": countdown,
+
+            "entry_zone": entry_zone,
+
+            "zone_color": zone_color,
+
+            "rsi": round(rsi, 2),
+
+            "wr": round(wr, 2),
+
+            "ma50": round(ma50, 5),
+
+            "ema10": round(ema10, 5),
+
+            "ema20": round(ema20, 5),
+
+            "ema_gap": round(ema_gap, 5),
+
+            "pattern": pattern,
+
+            "strength": round(strength, 2),
+
+            "trend": trend
+
+        }
+
+    # =====================================
+    # HIGH QUALITY BUY LOGIC
     # =====================================
 
     if (
 
-        ema10 > ema20
+        trend == "STRONG"
 
-        and rsi > 50
+        and ema10 > ema20
 
-        and ema_gap > 0.00010
+        and current_price > ma50
+
+        and ema_gap > 0.00030
+
+        and rsi > 58
+
+        and wr > -20
+
+        and strength >= 75
 
         and pattern in [
 
             "BULLISH_ENGULFING",
+
             "HAMMER"
 
         ]
-
-        and strength >= 60
 
     ):
 
         signal = "UP"
 
-        confidence = 78
+        confidence = 88
 
         entry_status = "ENTER NOW"
-
-        # =====================================
-        # SUPER STRONG BUY
-        # =====================================
-
-        if (
-
-            strength >= 80
-
-            and trend == "STRONG"
-
-            and rsi > 60
-
-        ):
-
-            confidence = 90
 
         # =====================================
         # ULTRA STRONG BUY
@@ -129,76 +252,59 @@ def generate_signal(df):
 
         if (
 
-            strength >= 95
+            rsi >= 65
 
-            and trend == "STRONG"
+            and strength >= 85
 
-            and rsi >= 70
+            and ema_gap > 0.00050
+
+            and wr > -10
 
         ):
 
             confidence = 95
 
-        # =====================================
-        # DYNAMIC EXPIRY
-        # =====================================
-
-        if strength >= 90:
-
             expiry = "2 MIN"
-
-        elif strength >= 80:
-
-            expiry = "3 MIN"
 
         else:
 
-            expiry = "5 MIN"
+            expiry = "3 MIN"
 
     # =====================================
-    # STRONG SELL LOGIC
+    # HIGH QUALITY SELL LOGIC
     # =====================================
 
     elif (
 
-        ema10 < ema20
+        trend == "STRONG"
 
-        and rsi < 50
+        and ema10 < ema20
 
-        and ema_gap > 0.00010
+        and current_price < ma50
+
+        and ema_gap > 0.00030
+
+        and rsi < 42
+
+        and wr < -80
+
+        and strength >= 75
 
         and pattern in [
 
             "BEARISH_ENGULFING",
+
             "SHOOTING_STAR"
 
         ]
-
-        and strength >= 60
 
     ):
 
         signal = "DOWN"
 
-        confidence = 78
+        confidence = 88
 
         entry_status = "ENTER NOW"
-
-        # =====================================
-        # SUPER STRONG SELL
-        # =====================================
-
-        if (
-
-            strength >= 80
-
-            and trend == "STRONG"
-
-            and rsi < 40
-
-        ):
-
-            confidence = 90
 
         # =====================================
         # ULTRA STRONG SELL
@@ -206,52 +312,26 @@ def generate_signal(df):
 
         if (
 
-            strength >= 95
+            rsi <= 35
 
-            and trend == "STRONG"
+            and strength >= 85
 
-            and rsi <= 30
+            and ema_gap > 0.00050
+
+            and wr < -90
 
         ):
 
             confidence = 95
 
-        # =====================================
-        # DYNAMIC EXPIRY
-        # =====================================
-
-        if strength >= 90:
-
             expiry = "2 MIN"
-
-        elif strength >= 80:
-
-            expiry = "3 MIN"
 
         else:
 
-            expiry = "5 MIN"
+            expiry = "3 MIN"
 
     # =====================================
-    # MEDIUM MARKET
-    # =====================================
-
-    elif (
-
-        trend == "MEDIUM"
-
-        and strength >= 55
-
-    ):
-
-        signal = "WAIT"
-
-        confidence = 65
-
-        expiry = "5 MIN"
-
-    # =====================================
-    # WEAK MARKET
+    # NO CLEAR TREND
     # =====================================
 
     else:
@@ -260,23 +340,9 @@ def generate_signal(df):
 
         confidence = 50
 
-        expiry = "5 MIN"
+        expiry = "WAIT"
 
-    # =====================================
-    # REAL CANDLE COUNTDOWN
-    # =====================================
-
-    seconds_left = 60 - now.second
-
-    countdown = f"00:{seconds_left:02d}"
-
-    # =====================================
-    # ENTRY FILTER
-    # =====================================
-
-    if seconds_left <= 8:
-
-        entry_status = "WAIT NEXT CANDLE"
+        entry_status = "NO CLEAR TREND"
 
     # =====================================
     # EXPIRY TIME
@@ -298,13 +364,41 @@ def generate_signal(df):
 
         ).strftime("%H:%M:%S")
 
+    # =====================================
+    # SIGNAL QUALITY BAR
+    # =====================================
+
+    if confidence >= 95:
+
+        quality = "██████████"
+
+    elif confidence >= 88:
+
+        quality = "████████"
+
+    elif confidence >= 70:
+
+        quality = "██████"
+
     else:
 
-        expiry_time = (
+        quality = "████"
 
-            now + timedelta(minutes=5)
+    # =====================================
+    # MARKET DIRECTION
+    # =====================================
 
-        ).strftime("%H:%M:%S")
+    if ema10 > ema20:
+
+        market_direction = "BULLISH"
+
+    elif ema10 < ema20:
+
+        market_direction = "BEARISH"
+
+    else:
+
+        market_direction = "SIDEWAYS"
 
     # =====================================
     # FINAL RESULT
@@ -318,6 +412,8 @@ def generate_signal(df):
 
         "confidence": confidence,
 
+        "signal_quality": quality,
+
         "entry_status": entry_status,
 
         "entry_time": entry_time,
@@ -328,7 +424,17 @@ def generate_signal(df):
 
         "countdown": countdown,
 
+        "entry_zone": entry_zone,
+
+        "zone_color": zone_color,
+
+        "market_direction": market_direction,
+
         "rsi": round(rsi, 2),
+
+        "wr": round(wr, 2),
+
+        "ma50": round(ma50, 5),
 
         "ema10": round(ema10, 5),
 

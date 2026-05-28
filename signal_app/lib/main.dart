@@ -20,6 +20,8 @@ class SignalApp extends StatelessWidget {
 }
 
 class HomePage extends StatefulWidget {
+  const HomePage({super.key});
+
   @override
   State<HomePage> createState() => _HomePageState();
 }
@@ -48,7 +50,7 @@ class _HomePageState extends State<HomePage> {
     loadSignal();
 
     Timer.periodic(
-      Duration(seconds: 15),
+      const Duration(seconds: 15),
       (timer) {
         loadSignal();
       },
@@ -80,27 +82,27 @@ class _HomePageState extends State<HomePage> {
 
       appBar: AppBar(
         backgroundColor: Colors.black,
-        title: Text(
+        title: const Text(
           "REAL SIGNAL BOT",
           style: TextStyle(color: Colors.white),
         ),
       ),
 
       body: Padding(
-        padding: EdgeInsets.all(16),
+        padding: const EdgeInsets.all(16),
 
         child: Column(
 
           children: [
 
             Container(
-              padding: EdgeInsets.all(12),
+              padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: Colors.orange,
                 borderRadius: BorderRadius.circular(12),
               ),
 
-              child: Row(
+              child: const Row(
                 mainAxisAlignment:
                 MainAxisAlignment.spaceBetween,
 
@@ -125,7 +127,7 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
 
             DropdownButton(
               dropdownColor: Colors.black,
@@ -137,7 +139,7 @@ class _HomePageState extends State<HomePage> {
                   value: e,
                   child: Text(
                     e,
-                    style: TextStyle(
+                    style: const TextStyle(
                       color: Colors.white,
                     ),
                   ),
@@ -154,14 +156,14 @@ class _HomePageState extends State<HomePage> {
               },
             ),
 
-            SizedBox(height: 20),
+            const SizedBox(height: 20),
 
             Expanded(
               child: Container(
 
                 width: double.infinity,
 
-                padding: EdgeInsets.all(20),
+                padding: const EdgeInsets.all(20),
 
                 decoration: BoxDecoration(
                   color: Colors.grey.shade900,
@@ -178,23 +180,23 @@ class _HomePageState extends State<HomePage> {
 
                     Text(
                       selectedPair,
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 28,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
 
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
 
-                    Text(
+                    const Text(
                       "SIGNAL",
                       style: TextStyle(
                         color: Colors.grey,
                       ),
                     ),
 
-                    SizedBox(height: 10),
+                    const SizedBox(height: 10),
 
                     Text(
                       "${data['signal'] ?? '--'}",
@@ -209,47 +211,47 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
 
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
 
                     Text(
                       "PRICE : ${data['price'] ?? '--'}",
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 20,
                       ),
                     ),
 
-                    SizedBox(height: 10),
+                    const SizedBox(height: 10),
 
                     Text(
                       "RSI : ${data['rsi'] ?? '--'}",
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 18,
                       ),
                     ),
 
-                    SizedBox(height: 10),
+                    const SizedBox(height: 10),
 
                     Text(
                       "EMA : ${data['ema'] ?? '--'}",
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.white,
                         fontSize: 18,
                       ),
                     ),
 
-                    SizedBox(height: 10),
+                    const SizedBox(height: 10),
 
                     Text(
                       "CONFIDENCE : ${data['strength'] ?? '--'}%",
-                      style: TextStyle(
+                      style: const TextStyle(
                         color: Colors.orange,
                         fontSize: 18,
                       ),
                     ),
 
-                    SizedBox(height: 20),
+                    const SizedBox(height: 20),
 
                     Row(
 
@@ -264,13 +266,13 @@ class _HomePageState extends State<HomePage> {
 
                             onPressed: () {},
 
-                            child: Text(
+                            child: const Text(
                               "BUY",
                             ),
                           ),
                         ),
 
-                        SizedBox(width: 20),
+                        const SizedBox(width: 20),
 
                         Expanded(
                           child: ElevatedButton(
@@ -281,7 +283,7 @@ class _HomePageState extends State<HomePage> {
 
                             onPressed: () {},
 
-                            child: Text(
+                            child: const Text(
                               "SELL",
                             ),
                           ),
